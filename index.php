@@ -9,6 +9,12 @@ if (!isset($_SESSION['user_id'])) {
     exit;
 }
 
+// 🟢 TASK 4 NEW: ডাটাবেস থেকে বর্তমান ইউজারের সঠিক রোল (Role) তুলে আনা
+$user_stmt = $pdo->prepare("SELECT role FROM users WHERE id = ?");
+$user_stmt->execute([$_SESSION['user_id']]);
+$current_user = $user_stmt->fetch();
+$user_role = $current_user ? $current_user['role'] : 'editor'; // ডিফল্ট রোল editor
+
 // ------------------ [ পেজিনেশন সেটআপ ] ------------------
 $limit = 5; 
 $page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
@@ -49,7 +55,6 @@ $total_pages = ceil($total_posts / $limit);
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard - Blog Application</title>
-    <!-- 🟢 ইন্টারনাল প্রফেশনাল সিএসএস ডিজাইন (কোনো ইন্টারনেটের প্রয়োজন নেই) -->
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f6f9; color: #333; margin: 0; padding: 0; }
         .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
@@ -82,6 +87,8 @@ $total_pages = ceil($total_posts / $limit);
         .pagination .active a { background: #0d6efd; color: white; border-color: #0d6efd; }
         .pagination .disabled a { color: #6c757d; pointer-events: none; background: #e9ecef; border-color: #dee2e6; }
         .section-title { color: #495057; border-bottom: 2px solid #dee2e6; padding-bottom: 10px; margin-bottom: 25px; font-size: 20px; }
+        .role-badge { font-size: 12px; background: #e2e3e5; color: #383d41; padding: 3px 8px; border-radius: 12px; font-weight: bold; margin-left: 10px; text-transform: uppercase; }
+        .role-admin { background: #cff4fc; color: #055160; }
     </style>
 </head>
 <body>
@@ -89,7 +96,13 @@ $total_pages = ceil($total_posts / $limit);
 <div class="container">
     <!-- ড্যাশবোর্ড হেডার -->
     <div class="header-card">
-        <h2>👋 স্বাগতম, <?php echo htmlspecialchars($_SESSION['username']); ?>!</h2>
+        <h2>
+            👋 স্বাগতম, <?php echo htmlspecialchars($_SESSION['username']); ?>!
+            <!-- রোল মেডেল প্রদর্শন -->
+            <span class="role-badge <?php echo ($user_role === 'admin') ? 'role-admin' : ''; ?>">
+                <?php echo htmlspecialchars($user_role); ?>
+            </span>
+        </h2>
         <div>
             <a href="create.php" class="btn btn-success">+ নতুন পোস্ট লিখুন</a>
             <a href="logout.php" class="btn btn-danger">লগআউট</a>
@@ -110,7 +123,7 @@ $total_pages = ceil($total_posts / $limit);
 
     <?php if (empty($posts)): ?>
         <div style="background: #fff3cd; color: #856404; padding: 20px; border-radius: 8px; text-align: center; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-            কোনো ব্লগ পোস্ট খুঁজে পাওয়া যায়নি!
+            কোনo ব্লগ পোস্ট খুঁজে পাওয়া যায়নি!
         </div>
     <?php else: ?>
         <?php foreach ($posts as $post): ?>
@@ -122,7 +135,11 @@ $total_pages = ceil($total_posts / $limit);
                     <small>📅 পোস্টের সময়: <?php echo $post['created_at']; ?></small>
                     <div>
                         <a href="edit.php?id=<?php echo $post['id']; ?>" class="btn btn-warning">এডিট</a>
-                        <a href="delete.php?id=<?php echo $post['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('আপনি কি নিশ্চিত যে এই পোস্টটি ডিলিট করতে চান?');">ডিলিট</a>
+                        
+                        <!-- 🟢 TASK 4 NEW: শুধুমাত্র ADMIN হলে তবেই ডিলিট বাটনটি স্ক্রিনে দেখা যাবে -->
+                        <?php if ($user_role === 'admin'): ?>
+                            <a href="delete.php?id=<?php echo $post['id']; ?>" class="btn btn-outline-danger" onclick="return confirm('আপনি কি নিশ্চিত যে এই পোস্টটি ডিলিট করতে চান?');">ডিলিট</a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -131,19 +148,14 @@ $total_pages = ceil($total_posts / $limit);
         <!-- পেজিনেশন নেভিগেশন লিঙ্ক ইন্টারফেস -->
         <?php if ($total_pages > 1): ?>
             <ul class="pagination">
-                <!-- Previous বাটন -->
                 <li class="<?php if($page <= 1){ echo 'disabled'; } ?>">
                     <a href="?page=<?php echo $page - 1; ?><?php if(!empty($search)){ echo '&search='.urlencode($search); } ?>">পূর্ববর্তী</a>
                 </li>
-                
-                <!-- পেজ নাম্বারের লুপ -->
                 <?php for($i = 1; $i <= $total_pages; $i++): ?>
                     <li class="<?php if($page == $i){ echo 'active'; } ?>">
                         <a href="?page=<?php echo $i; ?><?php if(!empty($search)){ echo '&search='.urlencode($search); } ?>"><?php echo $i; ?></a>
                     </li>
                 <?php endfor; ?>
-                
-                <!-- Next বাটন -->
                 <li class="<?php if($page >= $total_pages){ echo 'disabled'; } ?>">
                     <a href="?page=<?php echo $page + 1; ?><?php if(!empty($search)){ echo '&search='.urlencode($search); } ?>">পরবর্তী</a>
                 </li>
